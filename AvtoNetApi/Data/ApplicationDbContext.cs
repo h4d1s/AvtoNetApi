@@ -7,6 +7,10 @@ using AvtoNet.API.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using static System.Net.Mime.MediaTypeNames;
+using System.IO;
+using Image = AvtoNet.API.Models.Image;
 
 namespace AvtoNet.API.Data
 {
@@ -23,23 +27,33 @@ namespace AvtoNet.API.Data
             _webHostEnvironment = webHostEnvironment;
         }
 
-        //public override int SaveChanges()
-        //{
-        //    var deletedImages = ChangeTracker.Entries<Image>()
-        //        .Where(e => e.State == EntityState.Deleted);
+        public override int SaveChanges()
+        {
+            this.OnDeleteImage();
+            return base.SaveChanges();
+        }
 
-        //    foreach (var entry in deletedImages)
-        //    {
-        //        var deletedImage = entry.Entity;
-        //        var uploadsPath = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", deletedImage.ListingId.ToString());
-        //        if (Directory.Exists(uploadsPath))
-        //        {
-        //            Directory.Delete(uploadsPath, true);
-        //        }
-        //    }
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            this.OnDeleteImage();
+            return base.SaveChangesAsync(cancellationToken);
+        }
 
-        //    return base.SaveChanges();
-        //}
+        public void OnDeleteImage()
+        {
+            var deletedImages = ChangeTracker.Entries<Image>()
+                .Where(e => e.State == EntityState.Deleted);
+
+            foreach (var entry in deletedImages)
+            {
+                var deletedImage = entry.Entity;
+                var uploadsPath = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", deletedImage.ListingId.ToString());
+                if (Directory.Exists(uploadsPath))
+                {
+                    Directory.Delete(uploadsPath, true);
+                }
+            }
+        }
 
         public DbSet<Listing> Listings { get; set; }
         public DbSet<Vehicle> Vehicles { get; set; }

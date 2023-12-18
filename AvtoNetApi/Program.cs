@@ -4,6 +4,7 @@ using AvtoNet.API.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
@@ -15,30 +16,32 @@ builder.Services.AddSingleton<JwtService>();
 // Entity Framework
 if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Production")
 {
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(
+    builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(
         builder.Configuration.GetConnectionString("ApplicationDbContextProd") ??
-            throw new InvalidOperationException("Connection string 'ApplicationDbContext' not found."))
+            throw new InvalidOperationException("Connection string 'ApplicationDbContextProd' not found.")
+        )
     );
 }
-else
+else 
 {
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseSqlServer(
-            builder.Configuration.GetConnectionString("ApplicationDbContext") ??
-                throw new InvalidOperationException("Connection string 'ApplicationDbContext' not found."))
-        );
+    builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(
+        builder.Configuration.GetConnectionString("ApplicationDbContext") ??
+            throw new InvalidOperationException("Connection string 'ApplicationDbContext' not found.")
+        )
+    );
 }
+builder.Services
+    .BuildServiceProvider()
+    .GetService<ApplicationDbContext>()
+    .Database
+    .Migrate();
 builder.Services.AddScoped<DbInitializer>();
-
-builder.Services.BuildServiceProvider().GetService<ApplicationDbContext>().Database.Migrate();
 
 // Identity
 builder.Services
     .AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
-
 
 // Authorization
 builder.Services.AddAuthorization();
@@ -74,7 +77,10 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
     options.AddPolicy(name: "AvtoNetOrigins", builder =>
         builder
-            .WithOrigins("http://localhost:4200")
+            .WithOrigins(
+                "http://localhost:4200",
+                "https://avto-net-front-end.vercel.app"
+            )
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials()
@@ -100,7 +106,16 @@ app.UseAuthorization();
 
 app.UseStaticFiles();
 
-var services = app.Services;    
+var services = app.Services;
+
+if (app.Environment.IsDevelopment())
+{
+    using (var scope = services.CreateScope())
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<DbInitializer>();
+        dbContext.Initialize().GetAwaiter().GetResult();
+    }
+}
 
 app.MapControllers();
 
